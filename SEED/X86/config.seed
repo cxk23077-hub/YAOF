@@ -11,6 +11,7 @@ CONFIG_TOOLCHAINOPTS=y
 CONFIG_ZLIB_OPTIMIZE_SPEED=y
 CONFIG_PACKAGE_luci-app-attendedsysupgrade=n
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+CONFIG_PACKAGE_addition-trans-zh=y
 CONFIG_PACKAGE_autocore-x86=y
 CONFIG_PACKAGE_ethtool=y
 CONFIG_PACKAGE_dnsmasq-full=y
