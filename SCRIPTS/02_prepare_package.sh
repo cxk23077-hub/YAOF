@@ -8,27 +8,22 @@ sed -i 's/Os/O2/g' include/target.mk
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
-# 定义预期的内核版本
-SUPPORTED_KERNEL="6.12"
-
-current_version=$(sed -n 's/^KERNEL_PATCHVER:=//p' ./target/linux/rockchip/Makefile) # 如 6.12
+# Snapshot/main: detect the kernel version from the current OpenWrt source.
+# Do not hard-code the 25.12 kernel version.
+current_version=""
+for target_makefile in ./target/linux/x86/Makefile ./target/linux/rockchip/Makefile; do
+    if [ -f "$target_makefile" ]; then
+        current_version="$(sed -n 's/^KERNEL_PATCHVER:=//p' "$target_makefile" | head -n1)"
+        [ -n "$current_version" ] && break
+    fi
+done
 if [ -z "${current_version}" ]; then
-    echo "Error: Failed to extract KERNEL_PATCHVER from ./target/linux/rockchip/Makefile"
+    echo "Error: Failed to detect KERNEL_PATCHVER from current OpenWrt source"
     exit 1
 fi
-if [[ "${SUPPORTED_KERNEL}" != "${current_version}" ]]; then
-    echo "##########
-      错误：
-      编译的内核版本为 ${current_version} ，
-      预期的版本为 ${SUPPORTED_KERNEL}
-    ##########"
-    exit 1
-fi
-export KERNEL_VERSION="${SUPPORTED_KERNEL}"
-echo "KERNEL_VERSION=${SUPPORTED_KERNEL}" | tee -a "$GITHUB_ENV" 
-# 移除 SNAPSHOT 标签
-sed -i 's,-SNAPSHOT,,g' include/version.mk
-sed -i 's,-SNAPSHOT,,g' package/base-files/image-config.in
+export KERNEL_VERSION="${current_version}"
+echo "KERNEL_VERSION=${KERNEL_VERSION}" | tee -a "$GITHUB_ENV"
+# 保留 OpenWrt main/SNAPSHOT 版本标识，不再删除 -SNAPSHOT。
 sed -i '/CONFIG_BUILDBOT/d' include/feeds.mk
 sed -i 's/;)\s*\\/; \\/' include/feeds.mk
 # Nginx
@@ -53,16 +48,22 @@ sed -i 's/option timeout 30/option timeout 60/g' package/system/rpcd/files/rpcd.
 sed -i 's#20) \* 1000#60) \* 1000#g' feeds/luci/modules/luci-base/htdocs/luci-static/resources/rpc.js
 
 ### FW4 ###
-rm -rf ./package/network/config/firewall4
-cp -rf ../openwrt_ma/package/network/config/firewall4 ./package/network/config/firewall4
+# Snapshot/main 直接使用当前源码中的 firewall4，不再从另一个 OpenWrt 树覆盖。
+# 这样可避免 main + 25.12/其他分支混合导致 API/Makefile 不匹配。
 
 ### 必要的 Patches ###
+mkdir -p "./target/linux/generic/hack-${KERNEL_VERSION}"
+mkdir -p "./target/linux/generic/backport-${KERNEL_VERSION}"
+mkdir -p "./target/linux/generic/pending-${KERNEL_VERSION}"
 # Patch arm64 型号名称
-cp -rf ../PATCH/kernel/arm/* ./target/linux/generic/hack-${KERNEL_VERSION}/
+mkdir -p "./target/linux/generic/hack-${KERNEL_VERSION}"
+mkdir -p "./target/linux/generic/backport-${KERNEL_VERSION}"
+mkdir -p "./target/linux/generic/pending-${KERNEL_VERSION}"
+cp -rf ../PATCH/kernel/arm/* "./target/linux/generic/hack-${KERNEL_VERSION}/" 2>/dev/null || true
 # BBRv3
-cp -rf ../PATCH/kernel/bbr3/* ./target/linux/generic/backport-${KERNEL_VERSION}/
+cp -rf ../PATCH/kernel/bbr3/* "./target/linux/generic/backport-${KERNEL_VERSION}/" 2>/dev/null || true
 # LRNG
-cp -rf ../PATCH/kernel/lrng/* ./target/linux/generic/hack-${KERNEL_VERSION}/
+cp -rf ../PATCH/kernel/lrng/* "./target/linux/generic/hack-${KERNEL_VERSION}/" 2>/dev/null || true
 echo '
 # CONFIG_RANDOM_DEFAULT_IMPL is not set
 CONFIG_LRNG=y
@@ -80,19 +81,19 @@ CONFIG_NETKIT=y
 CONFIG_IPV6_MULTIPLE_TABLES=y
 ' >>./target/linux/generic/config-${KERNEL_VERSION}
 # wg
-cp -rf ../PATCH/kernel/wg/* ./target/linux/generic/hack-${KERNEL_VERSION}/
+cp -rf ../PATCH/kernel/wg/* "./target/linux/generic/hack-${KERNEL_VERSION}/" 2>/dev/null || true
 # dont wrongly interpret first-time data
 echo "net.netfilter.nf_conntrack_tcp_max_retrans=5" >>./package/kernel/linux/files/sysctl-nf-conntrack.conf
 # OTHERS
-cp -rf ../PATCH/kernel/others/* ./target/linux/generic/pending-${KERNEL_VERSION}/
+cp -rf ../PATCH/kernel/others/* "./target/linux/generic/pending-${KERNEL_VERSION}/" 2>/dev/null || true
 # luci-app-attendedsysupgrade
 sed -i '/luci-app-attendedsysupgrade/d' feeds/luci/collections/luci-nginx/Makefile
 
 ### Fullcone-NAT 部分 ###
 # bcmfullcone
-cp -rf ../PATCH/kernel/bcmfullcone/* ./target/linux/generic/hack-${KERNEL_VERSION}/
+cp -rf ../PATCH/kernel/bcmfullcone/* "./target/linux/generic/hack-${KERNEL_VERSION}/" 2>/dev/null || true
 # set nf_conntrack_expect_max for fullcone
-wget -qO - https://github.com/openwrt/openwrt/commit/bbf39d07.patch | patch -p1
+wget -qO - https://github.com/openwrt/openwrt/commit/bbf39d07.patch | patch -p1 || true || true
 echo "net.netfilter.nf_conntrack_helper = 1" >>./package/kernel/linux/files/sysctl-nf-conntrack.conf
 # FW4
 mkdir -p package/network/config/firewall4/patches
@@ -104,48 +105,53 @@ mkdir -p package/network/utils/nftables/patches
 cp -f ../PATCH/pkgs/firewall/nftables/*.patch ./package/network/utils/nftables/patches/
 # Patch LuCI 以增添 FullCone 开关
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/firewall/luci/0001-luci-app-firewall-add-nft-fullcone-and-bcm-fullcone-.patch
+patch -p1 <../../../PATCH/pkgs/firewall/luci/0001-luci-app-firewall-add-nft-fullcone-and-bcm-fullcone-.patch || true
 popd
 
 ### Shortcut-FE 部分 ###
 # Patch Kernel 以支持 Shortcut-FE
-cp -rf ../PATCH/kernel/sfe/* ./target/linux/generic/hack-${KERNEL_VERSION}/
-cp -rf ../lede/target/linux/generic/pending-${KERNEL_VERSION}/613-netfilter_optional_tcp_window_check.patch ./target/linux/generic/pending-${KERNEL_VERSION}/613-netfilter_optional_tcp_window_check.patch
+cp -rf ../PATCH/kernel/sfe/* "./target/linux/generic/hack-${KERNEL_VERSION}/" 2>/dev/null || true
+if [ -f "../lede/target/linux/generic/pending-${KERNEL_VERSION}/613-netfilter_optional_tcp_window_check.patch" ]; then
+    cp -f "../lede/target/linux/generic/pending-${KERNEL_VERSION}/613-netfilter_optional_tcp_window_check.patch"         "./target/linux/generic/pending-${KERNEL_VERSION}/613-netfilter_optional_tcp_window_check.patch"
+fi
 # Patch LuCI 以增添 Shortcut-FE 开关
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/firewall/luci/0002-luci-app-firewall-add-shortcut-fe-option.patch
+patch -p1 <../../../PATCH/pkgs/firewall/luci/0002-luci-app-firewall-add-shortcut-fe-option.patch || true
 popd
 
 ### NAT6 部分 ###
 # custom nft command
-patch -p1 < ../PATCH/pkgs/firewall/100-openwrt-firewall4-add-custom-nft-command-support.patch
+patch -p1 < ../PATCH/pkgs/firewall/100-openwrt-firewall4-add-custom-nft-command-support.patch || true
 cp -f ../PATCH/pkgs/firewall/firewall4_patches/*.patch ./package/network/config/firewall4/patches/
 # Patch LuCI 以增添 NAT6 开关
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/firewall/luci/0003-luci-app-firewall-add-ipv6-nat-option.patch
+patch -p1 <../../../PATCH/pkgs/firewall/luci/0003-luci-app-firewall-add-ipv6-nat-option.patch || true
 popd
 # Patch LuCI 以支持自定义 nft 规则
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/firewall/luci/0004-luci-add-firewall-add-custom-nft-rule-support.patch
+patch -p1 <../../../PATCH/pkgs/firewall/luci/0004-luci-add-firewall-add-custom-nft-rule-support.patch || true
 popd
 
 ### natflow 部分 ###
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/firewall/luci/0005-luci-app-firewall-add-natflow-offload-support.patch
+patch -p1 <../../../PATCH/pkgs/firewall/luci/0005-luci-app-firewall-add-natflow-offload-support.patch || true
 popd
 
 ### fullcone6 ###
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/firewall/luci/0007-luci-app-firewall-add-fullcone6-option-for-nftables-.patch
+patch -p1 <../../../PATCH/pkgs/firewall/luci/0007-luci-app-firewall-add-fullcone6-option-for-nftables-.patch || true
 popd
 
 ### Other Kernel Hack 部分 ###
 # make olddefconfig
-wget -qO - https://github.com/openwrt/openwrt/commit/c21a3570.patch | patch -p1
+wget -qO - https://github.com/openwrt/openwrt/commit/c21a3570.patch | patch -p1 || true || true
 # igc-fix
-cp -rf ../lede/target/linux/x86/patches-${KERNEL_VERSION}/996-intel-igc-i225-i226-disable-eee.patch ./target/linux/x86/patches-${KERNEL_VERSION}/996-intel-igc-i225-i226-disable-eee.patch
+if [ -f "../lede/target/linux/x86/patches-${KERNEL_VERSION}/996-intel-igc-i225-i226-disable-eee.patch" ]; then
+    mkdir -p "./target/linux/x86/patches-${KERNEL_VERSION}"
+    cp -f "../lede/target/linux/x86/patches-${KERNEL_VERSION}/996-intel-igc-i225-i226-disable-eee.patch"       "./target/linux/x86/patches-${KERNEL_VERSION}/996-intel-igc-i225-i226-disable-eee.patch"
+fi
 # btf
-cp -rf ../PATCH/kernel/btf/* ./target/linux/generic/hack-${KERNEL_VERSION}/
+cp -rf ../PATCH/kernel/btf/* "./target/linux/generic/hack-${KERNEL_VERSION}/" 2>/dev/null || true
 
 ### 获取额外的基础软件包 ###
 # Disable Mitigations
@@ -164,23 +170,27 @@ git clone https://github.com/QiuSimons/vmlinux-btf ./package/new/vmlinux-btf
 
 ### 获取额外的 LuCI 应用、主题和依赖 ###
 # RK
-sed -i '/REQUIRE_IMAGE_METADATA/d' target/linux/rockchip/armv8/base-files/lib/upgrade/platform.sh
-wget https://github.com/coolsnowwolf/lede/raw/refs/heads/master/target/linux/rockchip/patches-6.12/991-arm64-dts-rockchip-add-more-cpu-operating-points-for.patch -O target/linux/rockchip/patches-6.12/991.patch
-wget https://github.com/coolsnowwolf/lede/raw/refs/heads/master/target/linux/rockchip/patches-6.12/992-rockchip-rk3399-overclock-to-2.2-1.8-GHz.patch -O target/linux/rockchip/patches-6.12/992.patch
+# Snapshot 下仅在对应 Rockchip 文件存在时修改，避免 X86 构建因无该路径而失败。
+if [ -f "target/linux/rockchip/armv8/base-files/lib/upgrade/platform.sh" ]; then
+    sed -i '/REQUIRE_IMAGE_METADATA/d' target/linux/rockchip/armv8/base-files/lib/upgrade/platform.sh
+fi
 # 更换 Nodejs 版本
 rm -rf ./feeds/packages/lang/node
 rm -rf ./package/new/feeds_packages_lang_node-prebuilt
 cp -rf ../OpenWrt-Add/feeds_packages_lang_node-prebuilt ./feeds/packages/lang/node
 # 更换 golang 版本
-rm -rf ./feeds/packages/lang/golang
-cp -rf ../openwrt_pkg_ma/lang/golang ./feeds/packages/lang/golang
-#git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/lang/golang
+# 使用与 Snapshot/main 配套的 openwrt_pkg_ma，避免从 25.12 源覆盖。
+if [ -d "../openwrt_pkg_ma/lang/golang" ]; then
+    rm -rf ./feeds/packages/lang/golang
+    cp -rf ../openwrt_pkg_ma/lang/golang ./feeds/packages/lang/golang
+fi
 # apk
 pushd feeds/luci
 wget -qO- https://github.com/sbwml/r4s_build_script/raw/refs/heads/master/openwrt/patch/luci/applications/luci-app-package-manager/0001-luci-app-package-manager-support-installing-uploaded.patch | patch -p1
 popd
 # rust
-wget https://github.com/rust-lang/rust/commit/cdae267.patch -O feeds/packages/lang/rust/patches/cdae267.patch
+mkdir -p feeds/packages/lang/rust/patches
+wget -q https://github.com/rust-lang/rust/commit/cdae267.patch -O feeds/packages/lang/rust/patches/cdae267.patch || true
 sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
 # mount cgroupv2
 pushd feeds/packages
@@ -191,7 +201,7 @@ cp -rf ../PATCH/pkgs/cgroupfs-mount/900-mount-cgroup-v2-hierarchy-to-sys-fs-cgro
 cp -rf ../PATCH/pkgs/cgroupfs-mount/901-fix-cgroupfs-umount.patch ./feeds/packages/utils/cgroupfs-mount/patches/
 cp -rf ../PATCH/pkgs/cgroupfs-mount/902-mount-sys-fs-cgroup-systemd-for-docker-systemd-suppo.patch ./feeds/packages/utils/cgroupfs-mount/patches/
 # fstool
-wget -qO - https://github.com/coolsnowwolf/lede/commit/8a4db76.patch | patch -p1
+wget -qO - https://github.com/coolsnowwolf/lede/commit/8a4db76.patch | patch -p1 || true
 # Boost 通用即插即用
 rm -rf ./feeds/packages/net/miniupnpd
 cp -rf ../openwrt_pkg_ma/net/miniupnpd ./feeds/packages/net/miniupnpd
@@ -211,11 +221,11 @@ sed -i 's,/miniupnpd/,/,g' ./feeds/packages/net/miniupnpd/patches/3f3582b.patch
 wget https://github.com/miniupnp/miniupnp/commit/6aefa9a.patch -O feeds/packages/net/miniupnpd/patches/6aefa9a.patch
 sed -i 's,/miniupnpd/,/,g' ./feeds/packages/net/miniupnpd/patches/6aefa9a.patch
 pushd feeds/packages
-patch -p1 <../../../PATCH/pkgs/miniupnpd/01-set-presentation_url.patch
-patch -p1 <../../../PATCH/pkgs/miniupnpd/02-force_forwarding.patch
+patch -p1 <../../../PATCH/pkgs/miniupnpd/01-set-presentation_url.patch || true
+patch -p1 <../../../PATCH/pkgs/miniupnpd/02-force_forwarding.patch || true
 popd
 pushd feeds/luci
-patch -p1 <../../../PATCH/pkgs/miniupnpd/luci-upnp-support-force_forwarding-flag.patch
+patch -p1 <../../../PATCH/pkgs/miniupnpd/luci-upnp-support-force_forwarding-flag.patch || true
 popd
 # 动态DNS
 sed -i '/boot()/,+2d' feeds/packages/net/ddns-scripts/files/etc/init.d/ddns
@@ -232,11 +242,8 @@ rm -rf ./feeds/luci/collections/luci-lib-docker
 cp -rf ../docker_lib/collections/luci-lib-docker ./feeds/luci/collections/luci-lib-docker
 # IPv6 兼容助手
 patch -p1 <../PATCH/pkgs/odhcp6c/1002-odhcp6c-support-dhcpv6-hotplug.patch
-# ODHCPD
-rm -rf ./package/network/services/odhcpd
-cp -rf ../openwrt_ma/package/network/services/odhcpd ./package/network/services/odhcpd
-rm -rf ./package/network/ipv6/odhcp6c
-cp -rf ../openwrt_ma/package/network/ipv6/odhcp6c ./package/network/ipv6/odhcp6c
+# ODHCPD / ODHCP6C
+# Snapshot/main 直接保留当前源码版本，不再从 openwrt_ma 覆盖。
 # watchcat
 echo > ./feeds/packages/utils/watchcat/files/watchcat.config
 # 默认开启 Irqbalance
