@@ -1,20 +1,19 @@
 # ============================================================
 # UI
 # ============================================================
-
 luci
-luci-mod-dashboard
-luci-theme-aurora
+luci-theme-vantage
+luci-app-vantage
 addition-trans-zh
 
 # ============================================================
 # Translations
 # ============================================================
-
 luci-i18n-base-zh-cn
-luci-i18n-dashboard-zh-cn
 luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
+luci-i18n-vantage-zh-cn
+luci-i18n-vantage-theme-zh-cn
 luci-i18n-flowcone-zh-cn
 luci-i18n-sqm-zh-cn
 luci-i18n-arpbind-zh-cn
@@ -24,78 +23,30 @@ luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
 
 # ============================================================
-# Proxy & eBPF
+# Proxy Applications
 # ============================================================
-
+luci-app-flowcone
 luci-app-openclash
 luci-app-passwall
-luci-app-flowcone
-
-# ============================================================
-# Network & Routing
-# ============================================================
-
-luci-app-sqm
-luci-app-arpbind
-luci-app-ap-modem
-
-# ============================================================
-# VPN & Services
-# ============================================================
-
-
-# ============================================================
-# System & Filesystem
-# ============================================================
-
-ethtool
-kmod-fs-f2fs
-kmod-tcp-bbr
-zram-swap
-luci-app-filemanager
-luci-app-partexp
-
-# SFTP Server
-openssh-sftp-server
-
-# ============================================================
-# USB Tethering
-# ============================================================
-
-kmod-usb-net-rndis
-kmod-usb-net-ipheth
-usbmuxd
-kmod-usb-net-cdc-ether
-
-# ============================================================
-# Base Packages
-# ============================================================
-
--dnsmasq
-dnsmasq-full
--luci-app-attendedsysupgrade
--attendedsysupgrade-common
 
 # ============================================================
 # OpenClash Dependencies
 # ============================================================
-
 bash
 curl
 ca-bundle
-ruby
-ruby-yaml
 ipset
 ip-full
+ruby
+ruby-yaml
 unzip
+kmod-nft-tproxy
 kmod-tun
 kmod-inet-diag
-kmod-nft-tproxy
 
 # ============================================================
 # PassWall Basic Dependencies
 # ============================================================
-
 coreutils
 coreutils-base64
 coreutils-nohup
@@ -112,9 +63,8 @@ tcping
 lyaml
 
 # ============================================================
-# PassWall Firewall4 / nftables
+# nftables
 # ============================================================
-
 nftables
 kmod-nft-socket
 kmod-nft-tproxy
@@ -126,7 +76,6 @@ ipt2socks
 # ============================================================
 # PassWall Proxy Cores
 # ============================================================
-
 xray-core
 sing-box
 haproxy
@@ -154,6 +103,39 @@ naiveproxy
 # ============================================================
 # PassWall Geo Data
 # ============================================================
-
 v2ray-geoip
 v2ray-geosite
+
+# ============================================================
+# Network & Routing
+# ============================================================
+luci-app-sqm
+luci-app-arpbind
+luci-app-ap-modem
+
+# ============================================================
+# System & Filesystem
+# ============================================================
+ethtool
+kmod-fs-f2fs
+kmod-tcp-bbr
+zram-swap
+luci-app-filemanager
+luci-app-partexp
+openssh-sftp-server
+
+# ============================================================
+# USB Tethering
+# ============================================================
+kmod-usb-net-rndis
+kmod-usb-net-ipheth
+usbmuxd
+kmod-usb-net-cdc-ether
+
+# ============================================================
+# Base Packages
+# ============================================================
+-dnsmasq
+dnsmasq-full
+-luci-app-attendedsysupgrade
+-attendedsysupgrade-common
