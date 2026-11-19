@@ -1,17 +1,17 @@
 # ============================================================
-# UI - Aurora
+# UI - Vantage
 # ============================================================
 luci
-luci-mod-dashboard
-luci-theme-aurora
-luci-app-aurora-config
+luci-theme-vantage
+luci-app-vantage
+system-addon
 
 # ============================================================
 # Translations
 # ============================================================
 luci-i18n-base-zh-cn
-luci-i18n-dashboard-zh-cn
-luci-i18n-aurora-config-zh-cn
+luci-i18n-vantage-zh-cn
+luci-i18n-vantage-theme-zh-cn
 luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
 luci-i18n-flowcone-zh-cn
@@ -19,6 +19,7 @@ luci-i18n-sqm-zh-cn
 luci-i18n-arpbind-zh-cn
 luci-i18n-ap-modem-zh-cn
 luci-i18n-filemanager-zh-cn
+luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
 
 # ============================================================
@@ -39,6 +40,8 @@ ip-full
 ruby
 ruby-yaml
 unzip
+libcap
+libcap-bin
 kmod-tun
 kmod-inet-diag
 
@@ -83,14 +86,12 @@ geoview
 # Shadowsocks Rust
 # ============================================================
 shadowsocks-rust-sslocal
-shadowsocks-rust-ssserver
 
 # ============================================================
 # ShadowsocksR
 # ============================================================
 shadowsocksr-libev-ssr-local
 shadowsocksr-libev-ssr-redir
-shadowsocksr-libev-ssr-server
 
 # ============================================================
 # Proxy Plugins
@@ -124,16 +125,15 @@ luci-app-ap-modem
 # ============================================================
 ethtool
 kmod-tcp-bbr
+zram-swap
 luci-app-filemanager
+luci-app-partexp
 openssh-sftp-server
-
-# ============================================================
-# NIC Drivers (Keep Intel i226-V Only)
-# ============================================================
-kmod-igc
 
 # ============================================================
 # Base Packages
 # ============================================================
 -dnsmasq
 dnsmasq-full
+-luci-app-attendedsysupgrade
+-attendedsysupgrade-common
