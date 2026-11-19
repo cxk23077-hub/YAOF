@@ -132,22 +132,9 @@ openssh-sftp-server
 # NIC Drivers (Keep Intel i226-V Only)
 # ============================================================
 kmod-igc
--kmod-amazon-ena
--kmod-amd-xgbe
--kmod-bnx2
--kmod-dwmac-intel
--kmod-e1000
--kmod-e1000e
--kmod-forcedeth
--kmod-igb
--kmod-ixgbe
--kmod-r8169
--kmod-tg3
 
 # ============================================================
 # Base Packages
 # ============================================================
 -dnsmasq
 dnsmasq-full
--luci-app-attendedsysupgrade
--attendedsysupgrade-common
