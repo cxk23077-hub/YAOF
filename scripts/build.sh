@@ -94,14 +94,51 @@ if [ ! -d "$IB_DIR" ]; then
 fi
 
 mkdir -p "${IB_DIR}/keys"
+
+# OpenWrt-Add feed
 KEY_URL="https://qiusimons.github.io/OpenWrt-Add/keys/custom-feed.rsa.pub"
-log "Fetching feed signing key: ${KEY_URL}"
-curl -fsSL --retry 3 --retry-delay 2 "$KEY_URL" -o "${IB_DIR}/keys/custom-feed.rsa.pub" || die "Failed to download feed signing key"
+log "Fetching OpenWrt-Add signing key: ${KEY_URL}"
+curl -fsSL --retry 3 --retry-delay 2 "$KEY_URL" \
+    -o "${IB_DIR}/keys/custom-feed.rsa.pub" \
+    || die "Failed to download OpenWrt-Add signing key"
 
 FEED_URL="https://qiusimons.github.io/OpenWrt-Add/${ARCH}/packages.adb"
 if ! grep -qxF "$FEED_URL" "${IB_DIR}/repositories"; then
     sed -i "1i ${FEED_URL}" "${IB_DIR}/repositories"
 fi
+
+# PassWall APK repositories for OpenWrt 25.12.x
+# PassWall is distributed through signed APK feeds, not a GitHub "latest APK" URL.
+PASSWALL_RELEASE="${VERSION%.*}"
+PASSWALL_KEY_URL="https://master.dl.sourceforge.net/project/openwrt-passwall-build/apk.pub"
+PASSWALL_KEY="${IB_DIR}/keys/openwrt-passwall-build.pem"
+
+log "Fetching PassWall APK signing key: ${PASSWALL_KEY_URL}"
+curl -fsSL --retry 3 --retry-delay 2 "$PASSWALL_KEY_URL" \
+    -o "$PASSWALL_KEY" \
+    || die "Failed to download PassWall APK signing key"
+
+for feed in passwall_luci passwall_packages passwall2; do
+    PASSWALL_FEED_URL="https://master.dl.sourceforge.net/project/openwrt-passwall-build/releases/packages-${PASSWALL_RELEASE}/${ARCH}/${feed}/packages.adb"
+    if ! grep -qxF "$PASSWALL_FEED_URL" "${IB_DIR}/repositories"; then
+        printf '%s\n' "$PASSWALL_FEED_URL" >> "${IB_DIR}/repositories"
+    fi
+done
+
+# OpenClash is an architecture-independent APK released by the upstream project.
+# Pin the requested version by default; override OPENCLASH_TAG in the workflow if needed.
+OPENCLASH_TAG="${OPENCLASH_TAG:-v0.48.002}"
+OPENCLASH_VERSION="${OPENCLASH_TAG#v}"
+OPENCLASH_APK="${IB_DIR}/packages/luci-app-openclash-${OPENCLASH_VERSION}.apk"
+OPENCLASH_URL="https://github.com/vernesong/OpenClash/releases/download/${OPENCLASH_TAG}/luci-app-openclash-${OPENCLASH_VERSION}.apk"
+
+mkdir -p "${IB_DIR}/packages"
+log "Downloading OpenClash ${OPENCLASH_TAG}: ${OPENCLASH_URL}"
+rm -f "$OPENCLASH_APK" "${IB_DIR}/packages/packages.adb"
+curl -fL --retry 3 --retry-delay 2 "$OPENCLASH_URL" -o "$OPENCLASH_APK" \
+    || die "OpenClash APK download failed: ${OPENCLASH_URL}"
+[ -s "$OPENCLASH_APK" ] || die "OpenClash APK is empty"
+log "OpenClash APK downloaded: $(basename "$OPENCLASH_APK")"
 
 OVERLAY_DIR="${WORK_DIR}/overlay"
 rm -rf "$OVERLAY_DIR"
@@ -119,9 +156,15 @@ chmod +x "${OVERLAY_DIR}/usr/bin/fuck"
 
 mkdir -p "${OVERLAY_DIR}/etc/apk/keys"
 cp -af "${IB_DIR}/keys/custom-feed.rsa.pub" "${OVERLAY_DIR}/etc/apk/keys/"
+cp -af "${IB_DIR}/keys/openwrt-passwall-build.pem" "${OVERLAY_DIR}/etc/apk/keys/"
 
 mkdir -p "${OVERLAY_DIR}/etc/apk/repositories.d"
-echo "https://qiusimons.github.io/OpenWrt-Add/${ARCH}/packages.adb" > "${OVERLAY_DIR}/etc/apk/repositories.d/customfeeds.list"
+{
+    echo "https://qiusimons.github.io/OpenWrt-Add/${ARCH}/packages.adb"
+    for feed in passwall_luci passwall_packages passwall2; do
+        echo "https://master.dl.sourceforge.net/project/openwrt-passwall-build/releases/packages-${PASSWALL_RELEASE}/${ARCH}/${feed}/packages.adb"
+    done
+} > "${OVERLAY_DIR}/etc/apk/repositories.d/customfeeds.list"
 
 if [ "$TARGET" = "rockchip" ]; then
     mkdir -p "${OVERLAY_DIR}/etc/apk"
@@ -131,14 +174,18 @@ fi
 load_packages() {
     local file="$1"
     [ -f "$file" ] || die "Package profile not found: $file"
-    grep -v '^[[:space:]]*#' "$file" | grep -v '^[[:space:]]*$' | tr '\n' ' '
+    { grep -v '^[[:space:]]*#' "$file" | grep -v '^[[:space:]]*$' || true; } | tr -d '\r' | tr '\n' ' '
 }
 
 PACKAGES="$(load_packages "${ROOT_DIR}/profiles/packages.common") $(load_packages "${ROOT_DIR}/profiles/${PACKAGES_PROFILE}")"
-BUILD_LOG="${WORK_DIR}/build.log"
-SKIPPED_PACKAGES=""
-MAX_SKIP_ROUNDS=5
 
+for required_pkg in luci-app-openclash luci-app-passwall luci-i18n-passwall-zh-cn; do
+    if ! printf '%s\n' "$PACKAGES" | tr ' ' '\n' | grep -qxF "$required_pkg"; then
+        die "Required proxy package is missing from package profile: ${required_pkg}"
+    fi
+done
+
+BUILD_LOG="${WORK_DIR}/build.log"
 build_firmware() {
     local packages="$1"
     make -C "$IB_DIR" image \
@@ -148,48 +195,9 @@ build_firmware() {
         ROOTFS_PARTSIZE="1024" 2>&1 | tee "$BUILD_LOG"
 }
 
-missing_packages_from_log() {
-    local log_file="$1"
-    # apk (OpenWrt 25.x): "<pkg> (no such package):"
-    sed -nE 's/^[[:space:]]*([^ ]+) \(no such package\):[[:space:]]*$/\1/p' "$log_file"
-    # opkg (OpenWrt 24.x and older): "opkg_install_cmd: Cannot install package <pkg>."
-    sed -nE 's/.*opkg_install_cmd: Cannot install package ([^ ]+)\.$/\1/p' "$log_file"
-}
-
 log "Assembling firmware for ${PROFILE} (${VERSION})..."
-skip_round=0
-while :; do
-    if build_firmware "$PACKAGES"; then
-        break
-    fi
-
-    missing="$(missing_packages_from_log "$BUILD_LOG" | sort -u)"
-    kept=""
-    skipped=""
-    for pkg in $PACKAGES; do
-        if printf '%s\n' "$missing" | grep -qxF -- "$pkg"; then
-            skipped="${skipped}${skipped:+ }${pkg}"
-        else
-            kept="${kept}${kept:+ }${pkg}"
-        fi
-    done
-
-    if [ -z "$skipped" ]; then
-        die "Firmware build failed (no unavailable package detected). See ${BUILD_LOG}"
-    fi
-
-    skip_round=$((skip_round + 1))
-    if [ "$skip_round" -gt "$MAX_SKIP_ROUNDS" ]; then
-        die "Too many unavailable packages; last skipped: ${skipped}. See ${BUILD_LOG}"
-    fi
-
-    log "WARNING: Package(s) not available in repositories, skipping: ${skipped}"
-    SKIPPED_PACKAGES="${SKIPPED_PACKAGES}${SKIPPED_PACKAGES:+ }${skipped}"
-    PACKAGES="$kept"
-done
-
-if [ -n "$SKIPPED_PACKAGES" ]; then
-    log "WARNING: Firmware built without unavailable package(s): ${SKIPPED_PACKAGES}"
+if ! build_firmware "$PACKAGES"; then
+    die "Firmware build failed. No requested packages were skipped. See ${BUILD_LOG}"
 fi
 
 IB_BIN_DIR="${IB_DIR}/bin/targets/${TARGET}/${SUBTARGET}"
