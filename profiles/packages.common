@@ -123,6 +123,7 @@ luci-app-ap-modem
 # ============================================================
 # System & Filesystem
 # ============================================================
+system-addon
 ethtool
 kmod-tcp-bbr
 zram-swap
