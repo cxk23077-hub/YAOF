@@ -1,0 +1,29 @@
+#!/bin/sh
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+if [ ! -s /tmp/sysinfo/model ] || grep -qiE "Default string|To be filled|System manufacturer|Type2" /tmp/sysinfo/model 2>/dev/null; then
+    echo "Standard PC" > /tmp/sysinfo/model
+fi
+
+PSTATE_STATUS_FILE="/sys/devices/system/cpu/intel_pstate/status"
+if [ -f "$PSTATE_STATUS_FILE" ]; then
+    if [ "$(cat "$PSTATE_STATUS_FILE")" = "passive" ]; then
+        echo "active" > "$PSTATE_STATUS_FILE"
+    fi
+    for cpu_gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        [ -f "$cpu_gov" ] && echo "powersave" > "$cpu_gov"
+    done
+    for cpu_epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
+        [ -f "$cpu_epp" ] && echo "balance_performance" > "$cpu_epp"
+    done
+fi
+
+# 当默认主题被设为 vantage 但未安装该主题时，自动切换为已安装的 aurora 主题
+if [ "$(uci -q get luci.main.mediaurlbase)" = "/luci-static/vantage" ] && [ ! -d /www/luci-static/vantage ]; then
+    uci set luci.main.mediaurlbase='/luci-static/aurora'
+    uci commit luci
+    rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/
+fi
+
+exit 0
