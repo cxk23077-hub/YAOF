@@ -5,7 +5,6 @@ luci
 luci-mod-dashboard
 luci-theme-aurora
 luci-app-aurora-config
-addition-trans-zh
 
 # ============================================================
 # Translations
