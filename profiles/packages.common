@@ -21,6 +21,7 @@ luci-i18n-ap-modem-zh-cn
 luci-i18n-filemanager-zh-cn
 luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
+luci-i18n-statistics-zh-cn
 
 # ============================================================
 # Proxy Applications
@@ -123,11 +124,14 @@ luci-app-ap-modem
 # ============================================================
 # System & Filesystem
 # ============================================================
-autocore
 system-addon
 ethtool
 kmod-tcp-bbr
 zram-swap
+lm-sensors
+luci-app-statistics
+collectd-mod-sensors
+collectd-mod-thermal
 luci-app-filemanager
 luci-app-partexp
 openssh-sftp-server
