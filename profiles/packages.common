@@ -123,6 +123,7 @@ luci-app-ap-modem
 # ============================================================
 # System & Filesystem
 # ============================================================
+autocore
 system-addon
 ethtool
 kmod-tcp-bbr
