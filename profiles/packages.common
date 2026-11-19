@@ -1,17 +1,18 @@
 # ============================================================
-# UI - Vantage
+# UI - Aurora
 # ============================================================
 luci
-luci-theme-vantage
-luci-app-vantage
-system-addon
+luci-mod-dashboard
+luci-theme-aurora
+luci-app-aurora-config
+addition-trans-zh
 
 # ============================================================
 # Translations
 # ============================================================
 luci-i18n-base-zh-cn
-luci-i18n-vantage-zh-cn
-luci-i18n-vantage-theme-zh-cn
+luci-i18n-dashboard-zh-cn
+luci-i18n-aurora-config-zh-cn
 luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
 luci-i18n-flowcone-zh-cn
