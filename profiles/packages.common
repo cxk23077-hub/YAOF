@@ -5,6 +5,7 @@ luci
 luci-mod-dashboard
 luci-theme-aurora
 luci-app-aurora-config
+system-addon
 
 # ============================================================
 # Translations
@@ -16,12 +17,9 @@ luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
 luci-i18n-flowcone-zh-cn
 luci-i18n-sqm-zh-cn
-luci-i18n-arpbind-zh-cn
 luci-i18n-ap-modem-zh-cn
 luci-i18n-filemanager-zh-cn
-luci-i18n-partexp-zh-cn
 luci-i18n-passwall-zh-cn
-luci-i18n-statistics-zh-cn
 
 # ============================================================
 # Proxy Applications
@@ -41,8 +39,6 @@ ip-full
 ruby
 ruby-yaml
 unzip
-libcap
-libcap-bin
 kmod-tun
 kmod-inet-diag
 
@@ -76,41 +72,12 @@ kmod-nf-reject6
 ipt2socks
 
 # ============================================================
-# PassWall Proxy Cores
+# PassWall Proxy Cores & Geo Data
 # ============================================================
 xray-core
 sing-box
-haproxy
 geoview
-
-# ============================================================
-# Shadowsocks Rust
-# ============================================================
 shadowsocks-rust-sslocal
-
-# ============================================================
-# ShadowsocksR
-# ============================================================
-shadowsocksr-libev-ssr-local
-shadowsocksr-libev-ssr-redir
-
-# ============================================================
-# Proxy Plugins
-# ============================================================
-simple-obfs-client
-v2ray-plugin
-xray-plugin
-shadow-tls
-
-# ============================================================
-# Optional Proxy Protocols
-# ============================================================
-hysteria
-naiveproxy
-
-# ============================================================
-# PassWall Geo Data
-# ============================================================
 v2ray-geoip
 v2ray-geosite
 
@@ -118,22 +85,14 @@ v2ray-geosite
 # Network & Routing
 # ============================================================
 luci-app-sqm
-luci-app-arpbind
 luci-app-ap-modem
 
 # ============================================================
 # System & Filesystem
 # ============================================================
-system-addon
 ethtool
 kmod-tcp-bbr
-zram-swap
-lm-sensors
-luci-app-statistics
-collectd-mod-sensors
-collectd-mod-thermal
 luci-app-filemanager
-luci-app-partexp
 openssh-sftp-server
 
 # ============================================================
