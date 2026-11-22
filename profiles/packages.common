@@ -39,6 +39,8 @@ ip-full
 ruby
 ruby-yaml
 unzip
+libcap
+libcap-bin
 kmod-tun
 kmod-inet-diag
 
